@@ -7,12 +7,12 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
-        :root { --blue: #003a70; --red: #d32f2f; --green: #2e7d32; --gray: #455a64; --orange: #e65100; }
+        :root { --blue: #003a70; --red: #d32f2f; --green: #2e7d32; --orange: #e65100; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #e9ecef; padding-bottom: 80px; }
         .header { background: var(--blue); color: white; padding: 15px; text-align: center; font-size: 20px; font-weight: bold; }
         .tabs { display: flex; background: white; border-bottom: 2px solid #ddd; position: sticky; top: 0; z-index: 10; }
-        .tab { flex: 1; text-align: center; padding: 12px; font-weight: bold; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.2s; }
+        .tab { flex: 1; text-align: center; padding: 12px 4px; font-weight: bold; cursor: pointer; border-bottom: 3px solid transparent; font-size: 12px; }
         .tab.active { border-bottom: 3px solid var(--blue); color: var(--blue); }
         .panel { display: none; padding: 15px; }
         .panel.active { display: block; }
@@ -22,15 +22,21 @@
         .btn-blue { background: var(--blue); color: white; }
         .btn-green { background: var(--green); color: white; }
         .btn-red { background: var(--red); color: white; }
-        .btn-gray { background: var(--gray); color: white; }
         .btn-orange { background: var(--orange); color: white; }
         .btn-outline { background: white; border: 2px solid var(--blue); color: var(--blue); }
+        .btn-outline-red { background: white; border: 2px solid var(--red); color: var(--red); }
         .row { display: flex; gap: 10px; }
         .row .btn { flex: 1; }
         table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; text-align: left; }
         th { background: var(--blue); color: white; }
-        input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
+        input, select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .place-badge { display: inline-block; background: #c8e6c9; color: #1b5e20; padding: 8px 16px; border-radius: 20px; font-weight: bold; margin: 5px 0; }
+        .map-cell { display: inline-block; width: 28px; height: 28px; border-radius: 4px; margin: 1px; cursor: pointer; border: 1px solid #ccc; }
+        .map-cell.free { background: #c8e6c9; }
+        .map-cell.occ { background: #ffcdd2; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+        .modal-card { background: white; border-radius: 16px; padding: 20px; width: 90%; max-width: 400px; text-align: center; }
     </style>
 </head>
 <body>
@@ -38,38 +44,48 @@
 <div class="header">СКЛАД МТР</div>
 
 <div class="tabs">
-    <div class="tab active" onclick="switchTab('priemka')">Приемка</div>
-    <div class="tab" onclick="switchTab('otgruzka')">Отгрузка</div>
-    <div class="tab" onclick="switchTab('karta')">Карта</div>
-    <div class="tab" onclick="switchTab('photo')">Фото</div>
+    <div class="tab active" onclick="switchTab('priemka')">📥 Приёмка</div>
+    <div class="tab" onclick="switchTab('otgruzka')">📤 Отгрузка</div>
+    <div class="tab" onclick="switchTab('karta')">🗺 Карта</div>
+    <div class="tab" onclick="switchTab('photo')">🖼 Фото</div>
+    <div class="tab" onclick="switchTab('settings')">⚙️</div>
 </div>
 
 <!-- ПРИЁМКА -->
 <div id="panel-priemka" class="panel active">
     <div class="card">
-        <h3>Приемка материала</h3>
-        <p style="font-size:12px;color:gray;">1. Скан материала → 2. Скан места → 3. Фото (опц.) → 4. Количество</p>
-        <button class="btn btn-blue" onclick="startScan('material')">СКАНИРОВАТЬ МАТЕРИАЛ</button>
+        <h3>Приёмка материала</h3>
+        
+        <!-- Выбор способа указания места -->
+        <div class="row" style="margin-bottom:10px;">
+            <button class="btn btn-blue" onclick="startScan('place')" style="flex:1;">📍 Скан места</button>
+            <button class="btn btn-outline" onclick="manualPlace()" style="flex:1;">✍️ Ввести место</button>
+        </div>
+        <div id="scanResultPlace" style="text-align:center;font-weight:bold;margin:5px 0;"></div>
+        
+        <button class="btn btn-blue" onclick="startScan('material')">📷 Сканировать материал</button>
         <p id="scanResultMat" style="text-align:center;font-weight:bold;margin-top:5px;"></p>
-        <button class="btn btn-outline" onclick="startScan('place')">СКАНИРОВАТЬ МЕСТО</button>
-        <p id="scanResultPlace" style="text-align:center;font-weight:bold;margin-top:5px;"></p>
-        <button class="btn btn-orange" onclick="takePhoto()">СФОТОГРАФИРОВАТЬ</button>
+        
+        <button class="btn btn-orange" onclick="takePhoto()">📸 Сфотографировать</button>
         <img id="photoPreview" style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-top:10px;display:none;">
+        
         <input type="number" id="qtyInput" placeholder="Количество" value="1" min="0.001" step="any" style="margin-top:10px;font-size:18px;text-align:center;">
-        <button class="btn btn-green" onclick="confirmPriemka()">ПОДТВЕРДИТЬ ПРИЁМКУ</button>
-        <button class="btn btn-outline" onclick="clearSelection()">Сбросить</button>
+        
+        <button class="btn btn-green" onclick="confirmPriemka()">✅ Подтвердить приёмку</button>
+        <button class="btn btn-outline-red" onclick="finishSector()" id="btnFinishSector" style="display:none;">🚪 Завершить работу с местом</button>
+        <button class="btn btn-outline" onclick="clearSelection()">🔄 Сбросить</button>
     </div>
     <div class="card">
         <h3>Принято за сессию</h3>
         <div style="overflow-x:auto;">
             <table id="tblPriemka">
-                <thead><tr><th>Код</th><th>Наименование</th><th>Кол-во</th><th>Место</th></tr></thead>
+                <thead><tr><th>Код</th><th>Название</th><th>Кол-во</th><th>Место</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
         <div class="row">
-            <button class="btn btn-blue" onclick="savePriemkaExcel()">Сохранить Excel</button>
-            <button class="btn btn-red" onclick="clearPriemka()">Очистить</button>
+            <button class="btn btn-blue" onclick="savePriemkaExcel()">💾 Тальманка + Карта</button>
+            <button class="btn btn-red" onclick="clearPriemka()">🗑 Очистить</button>
         </div>
     </div>
 </div>
@@ -78,19 +94,19 @@
 <div id="panel-otgruzka" class="panel">
     <div class="card">
         <h3>Отгрузка со склада</h3>
-        <button class="btn btn-blue" onclick="startScan('otgruzka')">СКАНИРОВАТЬ ДЛЯ ОТГРУЗКИ</button>
+        <button class="btn btn-blue" onclick="startScan('otgruzka')">📷 Сканировать для отгрузки</button>
         <p id="scanResultOtgr" style="text-align:center;font-weight:bold;margin-top:5px;"></p>
-        <button class="btn btn-green" onclick="confirmOtgruzka()">ПОДТВЕРДИТЬ ОТГРУЗКУ</button>
+        <button class="btn btn-green" onclick="confirmOtgruzka()">🚛 Подтвердить отгрузку</button>
     </div>
     <div class="card">
         <h3>Отгружено</h3>
         <div style="overflow-x:auto;">
             <table id="tblOtgruzka">
-                <thead><tr><th>Код</th><th>Наименование</th><th>Кол-во</th><th>Место</th></tr></thead>
+                <thead><tr><th>Код</th><th>Название</th><th>Кол-во</th><th>Место</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
-        <button class="btn btn-blue" onclick="saveOtgruzkaExcel()">Сохранить М-15</button>
+        <button class="btn btn-blue" onclick="saveOtgruzkaExcel()">💾 М-15</button>
     </div>
 </div>
 
@@ -100,17 +116,14 @@
         <h3>Карта склада</h3>
         <select id="mapFilter" onchange="renderMap()">
             <option value="all">Все сектора</option>
-            <option value="A">Сектор A</option>
-            <option value="B">Сектор B</option>
-            <option value="C">Сектор C</option>
         </select>
         <div style="margin:10px 0;">
             <span style="display:inline-block;width:20px;height:20px;background:#c8e6c9;border-radius:4px;"></span> Свободно
             <span style="display:inline-block;width:20px;height:20px;background:#ffcdd2;border-radius:4px;margin-left:10px;"></span> Занято
         </div>
         <div id="mapContainer" style="margin-top:10px;"></div>
-        <button class="btn btn-blue" onclick="saveMapExcel()">Скачать карту</button>
-        <button class="btn btn-outline" onclick="loadMapFromFile()">Загрузить карту</button>
+        <button class="btn btn-blue" onclick="saveMapExcel()">💾 Скачать карту</button>
+        <button class="btn btn-outline" onclick="loadMapFromFile()">📂 Загрузить карту</button>
     </div>
 </div>
 
@@ -122,18 +135,46 @@
     </div>
 </div>
 
+<!-- НАСТРОЙКИ (РЕДАКТОР КАРТЫ) -->
+<div id="panel-settings" class="panel">
+    <div class="card">
+        <h3>⚙️ Редактор карты склада</h3>
+        <p style="font-size:12px;color:gray;">Задайте структуру склада. Каждый сектор — это набор рядов и ярусов.</p>
+        
+        <label style="font-weight:bold;">Названия секторов (через запятую):</label>
+        <input type="text" id="settingsSectors" value="A,B,C" placeholder="Например: A,B,C,D">
+        
+        <div class="row" style="margin-top:10px;">
+            <div style="flex:1;">
+                <label style="font-weight:bold;">Рядов:</label>
+                <input type="number" id="settingsRows" value="5" min="1" max="20">
+            </div>
+            <div style="flex:1;">
+                <label style="font-weight:bold;">Ярусов:</label>
+                <input type="number" id="settingsTiers" value="3" min="1" max="10">
+            </div>
+        </div>
+        
+        <button class="btn btn-blue" onclick="saveSettings()" style="margin-top:15px;">💾 Сохранить настройки</button>
+        <button class="btn btn-outline" onclick="loadSettings()">📂 Загрузить текущие</button>
+        <button class="btn btn-red" onclick="resetAllData()" style="margin-top:20px;">⚠️ Сбросить все данные склада</button>
+        
+        <div id="settingsStatus" style="margin-top:10px;text-align:center;font-weight:bold;"></div>
+    </div>
+</div>
+
 <video id="videoScan" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:999;"></video>
 
 <script>
-// СПРАВОЧНИК
-const CATALOG = {
+// ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
+const DEFAULT_CATALOG = {
     "123456789012": { name: "Труба 159х8 ст.20", unit: "м" },
     "123456789013": { name: "Задвижка клиновая ДУ100 Ру16", unit: "шт" },
     "123456789014": { name: "Отвод 90° 159х8 ст.20", unit: "шт" },
     "123456789015": { name: "Ящик ЗИП к задвижке ДУ100", unit: "ящ" },
-    "123456789016": { name: "Фланец стальной Ду100 Ру16", unit: "шт" },
 };
 
+let CATALOG = { ...DEFAULT_CATALOG };
 let priemkaList = [];
 let otgruzkaList = [];
 let warehouseMap = {};
@@ -144,29 +185,52 @@ let pendingPhoto = null;
 let scanStream = null;
 let scanInterval = null;
 
-// ЗАГРУЗКА КАРТЫ
+// Настройки склада
+let warehouseSettings = {
+    sectors: ['A', 'B', 'C'],
+    rows: 5,
+    tiers: 3
+};
+
+// ==================== ЗАГРУЗКА ДАННЫХ ====================
 function loadMap() { const s = localStorage.getItem('sklad_map'); if (s) warehouseMap = JSON.parse(s); }
 function saveMap() { localStorage.setItem('sklad_map', JSON.stringify(warehouseMap)); }
+function loadSettings() {
+    const s = localStorage.getItem('sklad_settings');
+    if (s) warehouseSettings = JSON.parse(s);
+    document.getElementById('settingsSectors').value = warehouseSettings.sectors.join(',');
+    document.getElementById('settingsRows').value = warehouseSettings.rows;
+    document.getElementById('settingsTiers').value = warehouseSettings.tiers;
+    updateMapFilter();
+}
+function saveSettingsData() { localStorage.setItem('sklad_settings', JSON.stringify(warehouseSettings)); }
 loadMap();
+loadSettings();
 
-// ВКЛАДКИ
+// ==================== ВКЛАДКИ ====================
 function switchTab(t) {
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
-    if (t === 'priemka') { document.querySelectorAll('.tab')[0].classList.add('active'); document.getElementById('panel-priemka').classList.add('active'); }
-    if (t === 'otgruzka') { document.querySelectorAll('.tab')[1].classList.add('active'); document.getElementById('panel-otgruzka').classList.add('active'); }
-    if (t === 'karta') { document.querySelectorAll('.tab')[2].classList.add('active'); document.getElementById('panel-karta').classList.add('active'); renderMap(); }
-    if (t === 'photo') { document.querySelectorAll('.tab')[3].classList.add('active'); document.getElementById('panel-photo').classList.add('active'); renderGallery(); }
+    const idx = ['priemka','otgruzka','karta','photo','settings'].indexOf(t);
+    document.querySelectorAll('.tab')[idx].classList.add('active');
+    document.getElementById('panel-'+t).classList.add('active');
+    if (t === 'karta') renderMap();
+    if (t === 'photo') renderGallery();
+    if (t === 'settings') loadSettings();
 }
 
-// СКАНИРОВАНИЕ
+// ==================== СКАНИРОВАНИЕ ====================
 async function startScan(mode) {
     currentMode = mode;
     document.getElementById('scanResultMat').textContent = '';
-    document.getElementById('scanResultPlace').textContent = '';
     document.getElementById('scanResultOtgr').textContent = '';
     pendingMaterial = null;
-    pendingPlace = null;
+    
+    if (mode === 'place') {
+        pendingPlace = null;
+        document.getElementById('scanResultPlace').textContent = '';
+        document.getElementById('btnFinishSector').style.display = 'none';
+    }
 
     if (!('BarcodeDetector' in window)) {
         const code = prompt('Введите код вручную:');
@@ -176,7 +240,7 @@ async function startScan(mode) {
 
     const video = document.getElementById('videoScan');
     video.style.display = 'block';
-    const detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'code_39'] });
+    const detector = new BarcodeDetector({ formats: ['qr_code','code_128','ean_13','code_39'] });
 
     try {
         scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -200,13 +264,13 @@ function stopScan() {
     if (scanInterval) clearInterval(scanInterval);
     if (scanStream) scanStream.getTracks().forEach(t => t.stop());
     document.getElementById('videoScan').style.display = 'none';
-    scanInterval = null;
-    scanStream = null;
+    scanInterval = null; scanStream = null;
 }
 document.getElementById('videoScan').onclick = stopScan;
 
 function handleScan(raw) {
     const code = raw.replace(/[^A-Za-z0-9\-]/g, '').toUpperCase();
+    
     if (currentMode === 'material') {
         const item = CATALOG[code];
         if (item) {
@@ -221,9 +285,11 @@ function handleScan(raw) {
             pendingMaterial = { code, name: n, unit: u };
             document.getElementById('scanResultMat').textContent = '✅ ' + n + ' (добавлено)';
         }
+        if (pendingPlace) { document.getElementById('qtyInput').focus(); document.getElementById('qtyInput').select(); }
     } else if (currentMode === 'place') {
         pendingPlace = code;
-        document.getElementById('scanResultPlace').textContent = '📍 ' + code;
+        document.getElementById('scanResultPlace').innerHTML = '<span class="place-badge">📍 ' + code + ' — место закреплено</span>';
+        document.getElementById('btnFinishSector').style.display = 'block';
     } else if (currentMode === 'otgruzka') {
         const item = CATALOG[code] || { name: code, unit: 'шт' };
         pendingMaterial = { code, name: item.name, unit: item.unit };
@@ -231,62 +297,83 @@ function handleScan(raw) {
     }
 }
 
-function clearSelection() {
-    pendingMaterial = null;
-    pendingPlace = null;
-    pendingPhoto = null;
-    document.getElementById('scanResultMat').textContent = '';
-    document.getElementById('scanResultPlace').textContent = '';
-    document.getElementById('photoPreview').style.display = 'none';
-    document.getElementById('qtyInput').value = 1;
+// ==================== РУЧНОЙ ВВОД МЕСТА ====================
+function manualPlace() {
+    const input = prompt('Введите название места (например: Площадка 5, B-3-1, Секция 12):');
+    if (!input) return;
+    pendingPlace = input.trim();
+    document.getElementById('scanResultPlace').innerHTML = '<span class="place-badge">📍 ' + pendingPlace + ' — место закреплено</span>';
+    document.getElementById('btnFinishSector').style.display = 'block';
 }
 
-// ФОТО
+// ==================== ЗАВЕРШИТЬ РАБОТУ С МЕСТОМ ====================
+function finishSector() {
+    if (!pendingPlace) return;
+    const place = pendingPlace;
+    const count = priemkaList.filter(p => p.place === place).length;
+    pendingPlace = null;
+    document.getElementById('scanResultPlace').innerHTML = '';
+    document.getElementById('btnFinishSector').style.display = 'none';
+    document.getElementById('scanResultMat').textContent = '';
+    pendingMaterial = null;
+    pendingPhoto = null;
+    document.getElementById('photoPreview').style.display = 'none';
+    document.getElementById('qtyInput').value = 1;
+    if (count > 0) alert('✅ Работа с местом «' + place + '» завершена.\nПринято позиций: ' + count);
+}
+
+function clearSelection() {
+    pendingMaterial = null; pendingPlace = null; pendingPhoto = null;
+    document.getElementById('scanResultMat').textContent = '';
+    document.getElementById('scanResultPlace').textContent = '';
+    document.getElementById('scanResultOtgr').textContent = '';
+    document.getElementById('photoPreview').style.display = 'none';
+    document.getElementById('qtyInput').value = 1;
+    document.getElementById('btnFinishSector').style.display = 'none';
+}
+
+// ==================== ФОТО ====================
 function takePhoto() {
-    const inp = document.createElement('input');
-    inp.type = 'file';
-    inp.accept = 'image/*';
-    inp.capture = 'environment';
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
     inp.onchange = (e) => {
-        const f = e.target.files[0];
-        if (!f) return;
+        const f = e.target.files[0]; if (!f) return;
         const r = new FileReader();
-        r.onload = (ev) => {
-            document.getElementById('photoPreview').src = ev.target.result;
-            document.getElementById('photoPreview').style.display = 'block';
-            pendingPhoto = ev.target.result;
-        };
+        r.onload = (ev) => { document.getElementById('photoPreview').src = ev.target.result; document.getElementById('photoPreview').style.display = 'block'; pendingPhoto = ev.target.result; };
         r.readAsDataURL(f);
     };
     inp.click();
 }
 
-// ПРИЁМКА
+// ==================== ПРИЁМКА ====================
 function confirmPriemka() {
-    if (!pendingMaterial) { alert('Сканируйте материал!'); return; }
-    if (!pendingPlace) { alert('Сканируйте место!'); return; }
+    if (!pendingMaterial) { alert('⚠️ Сканируйте материал!'); return; }
+    if (!pendingPlace) { alert('⚠️ Укажите место (скан или ручной ввод)!'); return; }
     const qty = parseFloat(document.getElementById('qtyInput').value);
-    if (isNaN(qty) || qty <= 0) { alert('Введите количество!'); return; }
+    if (isNaN(qty) || qty <= 0) { alert('⚠️ Введите количество!'); return; }
+    quickAdd(pendingMaterial, qty);
+}
 
-    priemkaList.push({ code: pendingMaterial.code, name: pendingMaterial.name, unit: pendingMaterial.unit, qty, place: pendingPlace, photo: pendingPhoto, time: new Date().toISOString() });
-
+function quickAdd(mat, qty) {
+    priemkaList.push({ code: mat.code, name: mat.name, unit: mat.unit, qty, place: pendingPlace, photo: pendingPhoto, time: new Date().toISOString() });
     if (!warehouseMap[pendingPlace]) warehouseMap[pendingPlace] = [];
-    const ex = warehouseMap[pendingPlace].find(m => m.code === pendingMaterial.code);
+    const ex = warehouseMap[pendingPlace].find(m => m.code === mat.code);
     if (ex) { ex.qty += qty; if (pendingPhoto) ex.photo = pendingPhoto; }
-    else { warehouseMap[pendingPlace].push({ code: pendingMaterial.code, name: pendingMaterial.name, qty, photo: pendingPhoto, receiptDate: new Date().toISOString(), history: [] }); }
-    saveMap();
-    renderPriemkaTable();
-    clearSelection();
+    else { warehouseMap[pendingPlace].push({ code: mat.code, name: mat.name, qty, photo: pendingPhoto, receiptDate: new Date().toISOString(), history: [] }); }
+    saveMap(); renderPriemkaTable();
+    pendingMaterial = null; pendingPhoto = null;
+    document.getElementById('scanResultMat').textContent = '';
+    document.getElementById('photoPreview').style.display = 'none';
+    document.getElementById('qtyInput').value = 1;
+    if (navigator.vibrate) navigator.vibrate(50);
 }
 
 function renderPriemkaTable() {
     document.querySelector('#tblPriemka tbody').innerHTML = priemkaList.map(p =>
-        `<tr><td>${p.code}</td><td>${p.name}</td><td>${p.qty} ${p.unit}</td><td>${p.place}</td></tr>`
-    ).join('');
+        `<tr><td>${p.code}</td><td>${p.name}</td><td>${p.qty} ${p.unit}</td><td>${p.place}</td></tr>`).join('');
 }
 function clearPriemka() { if (confirm('Очистить?')) { priemkaList = []; renderPriemkaTable(); } }
 
-// ОТГРУЗКА
+// ==================== ОТГРУЗКА ====================
 function confirmOtgruzka() {
     if (!pendingMaterial) { alert('Сканируйте материал!'); return; }
     let found = null, foundPlace = null;
@@ -301,35 +388,42 @@ function confirmOtgruzka() {
     found.qty -= qty;
     if (found.qty <= 0) { warehouseMap[foundPlace] = warehouseMap[foundPlace].filter(i => i.code !== found.code); if (warehouseMap[foundPlace].length === 0) delete warehouseMap[foundPlace]; }
     saveMap(); renderOtgruzkaTable();
-    document.getElementById('scanResultOtgr').textContent = '';
-    pendingMaterial = null;
+    document.getElementById('scanResultOtgr').textContent = ''; pendingMaterial = null;
 }
 function renderOtgruzkaTable() {
     document.querySelector('#tblOtgruzka tbody').innerHTML = otgruzkaList.map(o =>
-        `<tr><td>${o.code}</td><td>${o.name}</td><td>${o.qty}</td><td>${o.place}</td></tr>`
-    ).join('');
+        `<tr><td>${o.code}</td><td>${o.name}</td><td>${o.qty}</td><td>${o.place}</td></tr>`).join('');
 }
 
-// КАРТА
+// ==================== КАРТА ====================
+function updateMapFilter() {
+    const select = document.getElementById('mapFilter');
+    select.innerHTML = '<option value="all">Все сектора</option>';
+    warehouseSettings.sectors.forEach(s => {
+        select.innerHTML += '<option value="' + s + '">Сектор ' + s + '</option>';
+    });
+}
+
 function renderMap() {
+    updateMapFilter();
     const filter = document.getElementById('mapFilter').value;
     let html = '';
-    ['A','B','C'].forEach(s => {
+    warehouseSettings.sectors.forEach(s => {
         if (filter !== 'all' && filter !== s) return;
-        html += '<h4 style="margin-top:10px;">Сектор ' + s + '</h4>';
-        [1,2,3,4,5].forEach(r => {
-            html += '<div style="display:flex;align-items:center;margin:2px 0;"><span style="width:30px;font-size:11px;">Р' + r + '</span>';
-            [1,2,3].forEach(t => {
+        html += '<h4 style="margin-top:10px;">📍 Сектор ' + s + '</h4>';
+        for (let r = 1; r <= warehouseSettings.rows; r++) {
+            html += '<div style="display:flex;align-items:center;margin:2px 0;"><span style="width:30px;font-size:10px;">Р' + r + '</span>';
+            for (let t = 1; t <= warehouseSettings.tiers; t++) {
                 const key = s + '-' + r + '-' + t;
                 const occ = warehouseMap[key] && warehouseMap[key].length > 0;
-                const color = occ ? '#ffcdd2' : '#c8e6c9';
-                html += '<div style="display:inline-block;width:28px;height:28px;border-radius:4px;margin:1px;background:' + color + ';cursor:pointer;border:1px solid #ccc;" onclick="cellDetail(\'' + key + '\')"></div>';
-            });
+                html += '<div class="map-cell ' + (occ ? 'occ' : 'free') + '" onclick="cellDetail(\'' + key + '\')" title="' + key + '"></div>';
+            }
             html += '</div>';
-        });
+        }
     });
-    document.getElementById('mapContainer').innerHTML = html || 'Карта пуста';
+    document.getElementById('mapContainer').innerHTML = html || '<p>Карта пуста. Настройте склад во вкладке ⚙️.</p>';
 }
+
 function cellDetail(key) {
     const items = warehouseMap[key];
     if (!items || items.length === 0) { alert(key + ' — свободно'); return; }
@@ -338,71 +432,89 @@ function cellDetail(key) {
     alert(msg);
 }
 
-// ГАЛЕРЕЯ
+// ==================== ГАЛЕРЕЯ ====================
 function renderGallery() {
     const container = document.getElementById('galleryContainer');
     let all = [];
     for (const [place, items] of Object.entries(warehouseMap)) {
         items.forEach(i => { if (i.photo) all.push({...i, place}); });
     }
-    if (all.length === 0) { container.innerHTML = '<p style="color:gray;width:100%;text-align:center;">Нет фото</p>'; return; }
-    container.innerHTML = all.map(p => {
-        return '<div style="width:48%;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);" onclick="showPhoto(\'' + p.place + '\',\'' + p.code + '\')">' +
-            '<img src="' + p.photo + '" style="width:100%;height:120px;object-fit:cover;">' +
-            '<div style="padding:8px;"><div style="font-weight:bold;font-size:11px;">' + p.name + '</div><div style="font-size:10px;color:gray;">' + p.place + '</div></div></div>';
-    }).join('');
+    if (all.length === 0) { container.innerHTML = '<p style="color:gray;text-align:center;">Нет фото</p>'; return; }
+    container.innerHTML = all.map(p =>
+        '<div style="width:48%;background:white;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);" onclick="showPhoto(\'' + p.place + '\',\'' + p.code + '\')">' +
+        '<img src="' + p.photo + '" style="width:100%;height:120px;object-fit:cover;">' +
+        '<div style="padding:8px;"><div style="font-weight:bold;font-size:11px;">' + p.name + '</div><div style="font-size:10px;color:gray;">' + p.place + '</div></div></div>'
+    ).join('');
 }
 function showPhoto(place, code) {
     const items = warehouseMap[place];
     const item = items?.find(i => i.code === code);
     if (!item?.photo) { alert('Фото отсутствует.'); return; }
     const div = document.createElement('div');
-    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-    div.innerHTML = '<img src="' + item.photo + '" style="max-width:95%;max-height:70%;border-radius:10px;">' +
-        '<div style="color:white;text-align:center;padding:15px;"><b>' + item.name + '</b><br>' + place + ' | ' + item.qty + '</div>' +
-        '<button onclick="this.parentElement.remove()" style="padding:10px 25px;background:white;color:black;border:none;border-radius:20px;font-size:14px;">Закрыть</button>';
+    div.className = 'modal-overlay';
+    div.innerHTML = '<div class="modal-card"><img src="' + item.photo + '" style="max-width:100%;max-height:250px;border-radius:10px;"><h4>' + item.name + '</h4><p>' + place + ' | ' + item.qty + '</p><p>' + item.code + '</p><button class="btn btn-blue" onclick="this.closest(\'.modal-overlay\').remove()">Закрыть</button></div>';
     div.onclick = (e) => { if (e.target === div) div.remove(); };
     document.body.appendChild(div);
 }
 
-// СОХРАНЕНИЕ EXCEL
+// ==================== РЕДАКТОР КАРТЫ ====================
+function saveSettings() {
+    const sectorsStr = document.getElementById('settingsSectors').value.trim();
+    if (!sectorsStr) { alert('Введите названия секторов!'); return; }
+    warehouseSettings.sectors = sectorsStr.split(',').map(s => s.trim()).filter(s => s);
+    warehouseSettings.rows = parseInt(document.getElementById('settingsRows').value) || 5;
+    warehouseSettings.tiers = parseInt(document.getElementById('settingsTiers').value) || 3;
+    saveSettingsData();
+    updateMapFilter();
+    document.getElementById('settingsStatus').textContent = '✅ Настройки сохранены!';
+    document.getElementById('settingsStatus').style.color = 'green';
+    setTimeout(() => { document.getElementById('settingsStatus').textContent = ''; }, 2000);
+}
+
+function resetAllData() {
+    if (confirm('⚠️ Удалить ВСЕ данные склада?\nКарта, приёмка, отгрузка — всё будет очищено.\nЭто нельзя отменить.')) {
+        warehouseMap = {}; saveMap();
+        priemkaList = []; renderPriemkaTable();
+        otgruzkaList = []; renderOtgruzkaTable();
+        alert('✅ Все данные очищены.');
+    }
+}
+
+// ==================== СОХРАНЕНИЕ EXCEL ====================
 function savePriemkaExcel() {
     if (priemkaList.length === 0) { alert('Нет данных.'); return; }
     const wb = XLSX.utils.book_new();
-    const data = [['ТАЛЬМАНСКАЯ ВЕДОМОСТЬ'], [''], ['Дата:', new Date().toLocaleDateString()], [''], ['№','Код','Наименование','Ед.','Кол-во','Место']];
-    priemkaList.forEach((p,i) => data.push([i+1, p.code, p.name, p.unit, p.qty, p.place]));
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, 'Тальманка');
-    XLSX.writeFile(wb, 'Тальманка_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    const data = [['ТАЛЬМАНСКАЯ ВЕДОМОСТЬ'],[''],['Дата:',new Date().toLocaleDateString()],[''],['№','Код','Наименование','Ед.','Кол-во','Место']];
+    priemkaList.forEach((p,i) => data.push([i+1,p.code,p.name,p.unit,p.qty,p.place]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'Тальманка');
+    XLSX.writeFile(wb, 'Тальманка_'+new Date().toISOString().slice(0,10)+'.xlsx');
     setTimeout(() => {
         const wb2 = XLSX.utils.book_new();
-        const md = [['КАРТА СКЛАДА'], [''], ['Сектор','Ряд','Ярус','Код','Наименование','Кол-во']];
+        const md = [['КАРТА СКЛАДА'],[''],['Место','Код','Наименование','Кол-во']];
         for (const [place, items] of Object.entries(warehouseMap)) {
-            const parts = place.split('-');
-            items.forEach(i => md.push([parts[0],parts[1],parts[2],i.code,i.name,i.qty]));
+            items.forEach(i => md.push([place,i.code,i.name,i.qty]));
         }
         XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(md), 'Карта');
-        XLSX.writeFile(wb2, 'Карта_' + new Date().toISOString().slice(0,10) + '.xlsx');
+        XLSX.writeFile(wb2, 'Карта_'+new Date().toISOString().slice(0,10)+'.xlsx');
     }, 400);
 }
 function saveOtgruzkaExcel() {
     if (otgruzkaList.length === 0) { alert('Нет данных.'); return; }
     const wb = XLSX.utils.book_new();
-    const data = [['НАКЛАДНАЯ М-15'], [''], ['Дата:', new Date().toLocaleDateString()], [''], ['№','Код','Наименование','Кол-во','Место']];
-    otgruzkaList.forEach((o,i) => data.push([i+1, o.code, o.name, o.qty, o.place]));
+    const data = [['НАКЛАДНАЯ М-15'],[''],['Дата:',new Date().toLocaleDateString()],[''],['№','Код','Наименование','Кол-во','Место']];
+    otgruzkaList.forEach((o,i) => data.push([i+1,o.code,o.name,o.qty,o.place]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), 'М-15');
-    XLSX.writeFile(wb, 'Накладная_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    XLSX.writeFile(wb, 'Накладная_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 function saveMapExcel() {
     if (Object.keys(warehouseMap).length === 0) { alert('Карта пуста.'); return; }
     const wb = XLSX.utils.book_new();
-    const md = [['КАРТА СКЛАДА'], [''], ['Сектор','Ряд','Ярус','Код','Наименование','Кол-во']];
+    const md = [['КАРТА СКЛАДА'],[''],['Место','Код','Наименование','Кол-во']];
     for (const [place, items] of Object.entries(warehouseMap)) {
-        const parts = place.split('-');
-        items.forEach(i => md.push([parts[0],parts[1],parts[2],i.code,i.name,i.qty]));
+        items.forEach(i => md.push([place,i.code,i.name,i.qty]));
     }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(md), 'Карта');
-    XLSX.writeFile(wb, 'Карта_' + new Date().toISOString().slice(0,10) + '.xlsx');
+    XLSX.writeFile(wb, 'Карта_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 function loadMapFromFile() {
     const inp = document.createElement('input'); inp.type='file'; inp.accept='.xlsx';
@@ -413,10 +525,10 @@ function loadMapFromFile() {
             const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
             warehouseMap = {};
             for (let i = 5; i < rows.length; i++) {
-                const row = rows[i]; if (!row || !row[0] || row[0] === 'Сектор') continue;
-                const key = row[0] + '-' + row[1] + '-' + row[2];
+                const row = rows[i]; if (!row?.[0]) continue;
+                const key = String(row[0]);
                 if (!warehouseMap[key]) warehouseMap[key] = [];
-                warehouseMap[key].push({ code: String(row[3]), name: row[4], qty: parseFloat(row[5]) || 0 });
+                warehouseMap[key].push({ code: String(row[1]||''), name: row[2]||'', qty: parseFloat(row[3])||0 });
             }
             saveMap(); alert('Карта загружена!'); renderMap();
         };
@@ -425,9 +537,10 @@ function loadMapFromFile() {
     inp.click();
 }
 
-// ИНИЦИАЛИЗАЦИЯ
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
 renderPriemkaTable();
 renderOtgruzkaTable();
+updateMapFilter();
 </script>
 </body>
 </html>
