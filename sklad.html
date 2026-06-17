@@ -217,11 +217,20 @@ let scanTimer = null;
 
 // НАВИГАЦИЯ
 function switchTab(t) {
-    document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', i === ['priemka','otgruzka','karta','photo'].indexOf(t)));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel-'+t).classList.add('active');
-    if (t==='karta') renderMap();
-    if (t==='photo') renderGallery();
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
+    
+    var tabs = document.querySelectorAll('.tab');
+    if (t === 'priemka') tabs[0].classList.add('active');
+    if (t === 'otgruzka') tabs[1].classList.add('active');
+    if (t === 'karta') tabs[2].classList.add('active');
+    if (t === 'photo') tabs[3].classList.add('active');
+    
+    var panel = document.getElementById('panel-' + t);
+    if (panel) panel.classList.add('active');
+    
+    if (t === 'karta') renderMap();
+    if (t === 'photo') renderGallery();
 }
 
 // СКАНИРОВАНИЕ
